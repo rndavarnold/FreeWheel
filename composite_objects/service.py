@@ -6,7 +6,6 @@ Created on Jan 12, 2015
 import os, sys
 top_level = os.path.abspath(os.path.join(os.path.abspath(__file__), '..'))
 sys.path.append(top_level)
-import app_config
 import urlparse
 
 from aws_objects import load_balancer, instances
@@ -16,11 +15,10 @@ from db_objects import instance
 
 class Service:
     
-    def __init__(self, organization, domain, service_name, region):
-        self.organization = organization
-        self.domain = domain
+    def __init__(self, service_name, **kwargs):
         self.service_name = service_name
-        self.region = region
+        for k, v in kwargs.items():
+            setattr(self, k, v)
         
     def create(self):
         svc = service.Services()
@@ -28,10 +26,7 @@ class Service:
         svc.set_dns_name('{0}.{1}.{2}'.format(self.service_name, 
                                               self.organization, 
                                               self.domain))
-        conf_bucket = app_config.service.get('bucket')
-        conf_url = urlparse.urljoin('https://s3.amazon.com/', conf_bucket)
-        conf_url = urlparse.urljoin(conf_url, self.service_name)
-        svc.set_configuration_url(conf_url)
+        svc.set_configuration_url(self.configuration_url)
         svc.set_name(self.service_name)
         svc.save()
         svc.load(name=self.service_name)
@@ -55,7 +50,6 @@ class Service:
         lb = load_balancer.EC2LoadBalancer(lb_name, self.region)
         lb.create_healthcheck(10, 3, 3, healthcheck_url)
         lb.create_load_balancer(ports)
-        print self.domain
         lb.set_elb_dns(self.domain)
         
     def create_service_node(self, template):
@@ -65,9 +59,9 @@ class Service:
         vpc.load(organization_id=org.get('id'))
         vpc = vpc.dump()
         node = instances.EC2Instance(self.service_name,
-                                         self.region,
-                                         self.organization,
-                                         self.domain)
+                                     self.region,
+                                     self.organization,
+                                     self.domain)
         tpl = template.Templates()
         tpl.load(name=template)
         if not vpc:
