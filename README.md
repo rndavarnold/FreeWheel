@@ -1,6 +1,7 @@
 # paas
 Basic PaaS/Service Deployment project for AWS.
 
+# Work in progress
 This project will allow devops to easily deploy services to AWS. 
 This project shall watch a gitub repository for changes in infrastructure code and deploy according 
 to configuration files in top level directories.
