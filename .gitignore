@@ -1,2 +1,4 @@
 app_config.json
 *.pyc
+.vagrant
+*.swp

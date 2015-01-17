@@ -1,0 +1,66 @@
+- hosts: localhost
+  connection: local
+  gather_facts: False
+
+  tasks: 
+
+    - name: setup security group
+      ec2_group:
+        name: git-poller
+        description: an example EC2 group
+        region: us-east-1
+        rules:
+         - proto: tcp
+           from_port: 80
+           to_port: 80
+           cidr_ip: 0.0.0.0/0
+         - proto: tcp
+           from_port: 22
+           to_port: 22
+           cidr_ip: 0.0.0.0/0
+
+    - name: Provision ec2-instance
+      ec2:
+         key_name: custom-integrations-dev
+         group: git-poller
+         instance_type: t2.micro
+         image: ami-9eaa1cf6
+         wait: true
+         exact_count: 1
+         region: us-east-1
+         count_tag:
+            Name: git-poller
+         instance_tags:
+            Name: git-poller
+      register: ec2
+
+    - name: Add all instance public IPs to host group
+      add_host: hostname={{ item.public_ip }} groupname=ec2hosts
+      with_items: ec2.instances
+   
+    - wait_for: host={{ item.public_ip}}  port=22 delay=10
+      with_items: ec2.instances
+
+
+- hosts: ec2hosts
+  name: configuration play
+  user: ubuntu
+  gather_facts: true
+  tasks:
+    - name: update apt
+      apt: update_cache=yes
+
+    - name: install supervisor
+      apt: name=supervisor state=latest
+
+    - name: install python-devel
+      apt: name=python-dev state=latest
+
+    - name: install ansible
+      apt: name=ansible state=latest
+
+    - name: mk code dir
+      file: path=/opt/gitpoller state=directory
+
+    - name: push code
+      synchronize: src=./ dest=/opt/gitpoller/
