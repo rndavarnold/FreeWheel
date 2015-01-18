@@ -2,3 +2,4 @@ app_config.json
 *.pyc
 .vagrant
 *.swp
+aws_credentials
