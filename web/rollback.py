@@ -29,24 +29,10 @@ def requires_auth(f):
     return decorated
 
 @requires_auth
-@app.route('/organization/<organization_id>', methods=['PUT', 'GET'])
-def organization_id(organization_id):
-    # work with existing organizations
-    if request.method == 'PUT':
-        # update organization
-        pass
-    elif request.method == 'GET':
-        # return organization definition
-        pass
-    
-@requires_auth
-@app.route('/organization/', methods=['POST', 'GET'])
-def organization():
+@app.route('/rollback/<refspec>', methods=['POST'])
+def service(refspec):
     if request.method == 'POST':
-        # add organization
-        pass
-    elif request.method == 'GET':
-        # list organizations
+        # add service
         pass
 
 if __name__ == '__main__':

@@ -3,22 +3,8 @@ from flask import Flask
 from flask import Response, request
 from functools import wraps
 from flask import request, Response
-import json
-import redis
-
-import os
-import sys
-
-sys.path.append(os.path.abspath(os.path.join(os.path.abspath(__file__), '../..')))
-import db_objects
 
 app = Flask(__name__)
-
-def check_org(json_obj):
-    org = db_objects.orgnanizations.Organization()
-    org.load(name=json_obj.get('organization'))
-    print json.dumps(org.dump(), separators=(',', ':'), indent=4, sort_keys=True)
-        
 
 def check_auth(username, password):
     """This function is called to check if a username /
@@ -43,27 +29,17 @@ def requires_auth(f):
     return decorated
 
 @requires_auth
-@app.route('/service/<service_id>', methods=['PUT', 'GET'])
-def service_id(service_id):
+@app.route('/provision/<service_id>', methods=['GET', 'POST'])
+def provision(service_id):
     # work with existing services
-    if request.method == 'PUT':
-        # update service
+    if request.method == 'GET':
+        # return last provisionment details
         pass
-    elif request.method == 'GET':
-        # return service definition
+
+    if request.method == 'POST':
+        # return information regarding provisioning 
         pass
     
-@requires_auth
-@app.route('/service/', methods=['POST', 'GET'])
-def service():
-    if request.method == 'POST':
-        print json.dumps(request.json, separators=(',', ':'), indent=4, sort_keys=True)
-        check_org(request.json)
-        return Response(status=200)
-
-    elif request.method == 'GET':
-        # list services
-        return Response(status=200)
 
 if __name__ == '__main__':
     from optparse import OptionParser
