@@ -11,39 +11,14 @@ import sys
 
 sys.path.append(os.path.abspath(os.path.join(os.path.abspath(__file__), '../..')))
 import db_objects
-
+import db_objects.organizations
+import db_objects.service_dependencies
+import db_objects.service
+import auth
 app = Flask(__name__)
 
-def check_org(json_obj):
-    org = db_objects.orgnanizations.Organization()
-    org.load(name=json_obj.get('organization'))
-    print json.dumps(org.dump(), separators=(',', ':'), indent=4, sort_keys=True)
-        
-
-def check_auth(username, password):
-    """This function is called to check if a username /
-    password combination is valid.
-    """
-    return username == 'admin' and password == 'secret'
-
-def authenticate():
-    """Sends a 401 response that enables basic auth"""
-    return Response(
-    'Could not verify your access level for that URL.\n'
-    'You have to login with proper credentials', 401,
-    {'WWW-Authenticate': 'Basic realm="Login Required"'})
-
-def requires_auth(f):
-    @wraps(f)
-    def decorated(*args, **kwargs):
-        auth = request.authorization
-        if not auth or not check_auth(auth.username, auth.password):
-            return authenticate()
-        return f(*args, **kwargs)
-    return decorated
-
-@requires_auth
 @app.route('/service/<service_id>', methods=['PUT', 'GET'])
+@auth.requires_auth
 def service_id(service_id):
     # work with existing services
     if request.method == 'PUT':
@@ -53,12 +28,41 @@ def service_id(service_id):
         # return service definition
         pass
     
-@requires_auth
 @app.route('/service/', methods=['POST', 'GET'])
+@auth.requires_auth
 def service():
     if request.method == 'POST':
-        print json.dumps(request.json, separators=(',', ':'), indent=4, sort_keys=True)
-        check_org(request.json)
+        j = request.json
+        dependencies = {}
+        org = db_objects.organizations.Organizations()
+        org.load(api_key=request.headers.get('api_key'))
+        org_dump = org.dump()
+        org_id = org_dump.get('id')
+
+        if j.get('dependencies'):
+            dependencies = j.pop('dependencies')
+
+        j['org_id'] = org_id
+        svc = db_objects.service.Services()
+        svc.load(**j)
+
+        if svc.dump():
+            return Response(json.dumps(dict(error='cannot create requested item. already exists')), status=400, mimetype='application/json')
+
+        for k, v in j.items():
+            svc.set(k, v)
+        svc.insert()
+
+        for k, v in dependencies.items():
+            name = v.pop('id')
+            v['name'] = name
+            v['engine'] = k                
+            #print json.dumps(v, separators=(',', ':'), sort_keys=True, indent=4)
+            svc_dep = db_objects.service_dependencies.ServiceDependencies()
+            for key, value in v.items():
+                svc_dep.set(key, value)
+            svc_dep.insert() 
+
         return Response(status=200)
 
     elif request.method == 'GET':
