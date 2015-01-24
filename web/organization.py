@@ -13,65 +13,18 @@ import hashlib
 sys.path.append(os.path.abspath(os.path.join(__file__, '../..')))
 from db_objects import organizations
 import app_config
+import auth
 
 app = Flask(__name__)
 
-
-def hash_password(password):
-    return hashlib.md5(password).hexdigest()
-
-def check_auth(username, password):
-    """This function is called to check if a username /
-    password combination is valid.
-    """
-    org = organization.Organizations()
-    org.laod(name=username, passord=hash_password(password))
-    if org.dump() and org.get('enabled'):
-        request.headers['api_key'] = org.get('api_key')
-        return True
-    else:
-        return False
-
-def check_api_key(api_key):
-    r = redis.Redis(app_config.redis.get('host'),
-                    password=app_config.redis.get('auth'))
-    if api_key == r.get('master_api_key'):
-        return True
-    org = organizations.Organizations()
-    org.load(api_key=api_key)
-    if org.dump():
-        return True
-    else:
-        return False
-
-def authenticate():
-    """Sends a 401 response that enables basic auth"""
-    return Response(
-    'Could not verify your access level for that URL.\n'
-    'You have to login with proper credentials', 401,
-    {'WWW-Authenticate': 'Basic realm="Login Required"'})
-
-def requires_auth(f):
-    @wraps(f)
-    def decorated(*args, **kwargs):
-        auth = request.authorization
-        api_key = request.headers.get('api_key')
-        if check_api_key(api_key):
-            return f(*args, **kwargs)
-        elif check_auth(auth.username, auth.password):
-            return f(*args, **kwargs)
-        else:
-            return authenticate()
-        return f(*args, **kwargs)
-    return decorated
-
 def check_fields():
+    global error_fields
     error_fields = []
     org = organizations.Organizations()
     error_fields
-    for k, v in request.json.items():
-        if k not in org.get_fields():
-            error_fields.append(k)
+    for key in request.json:
+        if key not in org.get_fields():
+            error_fields.append(key)
             continue
     if error_fields:
         return False
@@ -79,7 +32,7 @@ def check_fields():
         return True
     
 @app.route('/organization/', methods=['PUT', 'GET'])
-@requires_auth
+@auth.requires_auth
 def organization_api_key():
     # work with existing organizations
     if request.method == 'PUT':
@@ -87,22 +40,33 @@ def organization_api_key():
         org = organizations.Organizations()
         org_name = request.json.get('name')
         domain = request.json.get('domain')
-        org.load(name=org_name, domain=domain, api_key=request.headers.get('api_key'))
+
+        org.load(name=org_name, 
+                 domain=domain, 
+                 api_key=request.headers.get('api_key'))
+
         if not check_fields():
-            return Response(json.dumps(dict(error='fields not correct: {0}'.format(','.join(error_fields)))), status=400, mimetype='application/json')
+            e = 'fields not correct: {0}'.format(','.join(error_fields))
+            return Response(json.dumps(dict(error=e)), 
+                            status=400, 
+                            mimetype='application/json')
         else:
             for k, v in request.json.items():
                 if k == 'api_key': continue # users should not be able to update their api_key as this could allow hackers to gain access to other orgs.
                 if k == 'creation_date': continue # users should not be able to update their creation_date as we'll use this for billing purposes.
                 org.set(k, v)
             org.update()
-            return Response(json.dumps(dict(success='organization updated')), status=200, mimetype='application/json')
+            return Response(json.dumps(dict(success='organization updated')), 
+                            status=200, 
+                            mimetype='application/json')
 
 
     elif request.method == 'GET':
         org = organizations.Organizations()
         try:
-            org.load(name=request.args.get('name'), domain=request.args.get('domain'), api_key=request.headers.get('api_key'))
+            org.load(name=request.args.get('name'), 
+                     domain=request.args.get('domain'), 
+                     api_key=request.headers.get('api_key'))
         except Exception, e:
             print str(e)
             return Response(json.dumps(dict(error='cannot retrieve requested item')), status=400, mimetype='application/json')
@@ -129,7 +93,7 @@ def mk_organization():
         try:
             org.set('enabled', False)
             org.set('api_key', uuid.uuid4())
-            org.set('password', hash_password(request.json.get('password')))
+            org.set('password', auth.hash_password(request.json.get('password')))
             org.insert() 
             org.load(name=org_name)
             return Response(json.dumps(dict(success='organization created', api_key=org.get('api_key'))), status=200, mimetype='application/json')
