@@ -21,8 +21,8 @@ app = Flask(__name__)
 
 def check_fields():
     error_fields = []
-    svc = service.Services()
-    svc_lb = svc_lb.ServiceLoadBalancers()
+    svc = db_objects.service.Services()
+    lb =  svc_lb.ServiceLoadBalancers()
     svc_dep = db_objects.service_dependencies.ServiceDependencies()
     
     j = request.json
@@ -42,13 +42,14 @@ def check_fields():
     
     if load_balancer:
         for key in load_balancer:
-            if key not in svc_lb.get_fields():
+            if key not in lb.get_fields():
                 error_fields.append(key)
 
     if dependencies:
-        for key in load_balancer:
-            if key not in svc_dep.get_fields():
-                error_fields.append(key)
+        for dep in dependencies:
+            for key in dependencies.get(dep):
+                if key not in svc_dep.get_fields():
+                    error_fields.append(key)
                 
     if error_fields:
         return False
@@ -61,29 +62,31 @@ def service_id(service_api_key):
     # work with existing services
     if request.method == 'PUT':
         org = db_objects.organizations.Organizations()
-        org.load(api_key=request.headers.get('headers'))
+        org.load(api_key=request.headers.get('api_key'))
         lb = None
         dep = None
         if not check_fields():
-            return Response(status=400,
-                            json.dumps(dict(error='fields incorrect')),
+            return Response(json.dumps(dict(error='fields incorrect')),
+                            status=400,
                             mimetype='application/json')
                
         j = request.json
+        print json.dumps(j, sort_keys=True, indent=4, separators=(',', ':'))
         if j.get('load_balancer'):
             lb = j.pop('load_balancer')
+
         if j.get('dependencies'):
             dep = j.pop('dependencies')
 
         # update service definition
         svc = db_objects.service.Services()
         svc.load(service_api_key=service_api_key,
-                 org_id=org.get('api_key'))    
-        
+                 org_id=org.get('id'))    
+
         # if service doesn't exist return 400
         if not svc.dump():
-            return Response(status=400,
-                            json.dumps(dict(error='service does not exist')),
+            return Response(json.dumps(dict(error='service does not exist')),
+                            status=400,
                             mimetype='application/json')
             
         for k, v in j.items():
@@ -102,6 +105,7 @@ def service_id(service_api_key):
                 svc_lb.set(k, v)
             svc_lb.update()
         else:
+            svc_lb = db_objects.service_loadbalancers.ServiceLoadBalancers()
             svc_lb.load(service_id=svc.get('id'))
             if svc_lb.dump():
                 svc_lb.delete()
@@ -112,9 +116,13 @@ def service_id(service_api_key):
                 svc_dep.set(k, v)
             svc.update()
         else:
+            svc_dep = db_objects.service_dependencies.ServiceDependencies()
             svc_dep.load(service_id=svc.get('id'))
             if svc_dep.dump():
                 svc_dep.delete()
+        return Response(json.dumps(dict(success='service updated')),
+                        status=200,
+                        mimetype='application/json')
                             
     elif request.method == 'GET':
         svc = db_objects.service.Services()
@@ -123,21 +131,23 @@ def service_id(service_api_key):
         svc.load(org_id=org.get('id'), service_api_key=service_api_key)
         svc_json = svc.dump()
         if not svc.dump():
-            return Response(status=400,
-                            json.dumps(dict(error='service does not exist')),
+            return Response(json.dumps(dict(error='service does not exist')),
+                            status=400,
                             mimetype='application/json')
         else:
             service_id = svc.get('id')
             svc_lb = db_objects.service_loadbalancers.ServiceLoadBalancers()
             svc_lb.load(service_id=service_id)
+            print json.dumps(svc_lb.dump(), indent=4, separators=(',', ':'))
             if svc_lb.dump():
                 svc_json['load_balancer'] = svc_lb.dump()
             svc_dep = db_objects.service_dependencies.ServiceDependencies()
             svc_dep.load(service_id=service_id)
+            print json.dumps(svc_dep.dump(), indent=4, separators=(',', ':'))
             if svc_dep.dump():
                 svc_json['dependencies'] = svc_dep.dump()
-            return Response(status=200,
-                            json.dumps(svc_json),
+            return Response(json.dumps(svc_json),
+                            status=200,
                             mimetype='application/json')
      
 @app.route('/service/', methods=['POST', 'GET'])
@@ -215,8 +225,8 @@ def service():
             if dep.dump():
                 s['dependencies'] = dep.dump()
             svcs.append(s)
-        return Response(status=200,
-                        json.dumps(svcs),
+        return Response(json.dumps(svcs),
+                        status=200,
                         mimetype='application/json')
 
 if __name__ == '__main__':

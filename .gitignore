@@ -4,3 +4,4 @@ app_config.py
 .vagrant
 *.swp
 aws_credentials
+test/definition/*

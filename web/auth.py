@@ -54,11 +54,11 @@ def authenticate():
 def requires_auth(f):
     @wraps(f)
     def decorated(*args, **kwargs):
-        auth = request.authorization
+        auth_headers = request.authorization
         api_key = request.headers.get('api_key')
         if check_api_key(api_key):
             return f(*args, **kwargs)
-        elif check_auth(auth.username, auth.password):
+        elif auth_headers and check_auth(auth_headers.username, auth_headers.password):
             return f(*args, **kwargs)
         else:
             return authenticate()

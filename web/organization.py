@@ -63,13 +63,15 @@ def organization_api_key():
 
     elif request.method == 'GET':
         org = organizations.Organizations()
+        print 'called function with get'
+        print request.json
+        print request.headers.get('api_key')
         try:
             org.load(name=request.args.get('name'), 
                      domain=request.args.get('domain'), 
                      api_key=request.headers.get('api_key'))
         except Exception, e:
-            print str(e)
-            return Response(json.dumps(dict(error='cannot retrieve requested item')), status=400, mimetype='application/json')
+            return Response(json.dumps(dict(error=str(e))), status=400, mimetype='application/json')
 
         if org.dump():
             org.set('creation_date', str(org.get('creation_date')))
@@ -91,17 +93,26 @@ def mk_organization():
             return Response(json.dumps(dict(error='fields not correct: {0}'.format(','.join(error_fields)))), status=400, mimetype='application/json')
 
         try:
+            for k, v in request.json.items():
+                org.set(k, v)
             org.set('enabled', False)
             org.set('api_key', uuid.uuid4())
             org.set('password', auth.hash_password(request.json.get('password')))
             org.insert() 
-            org.load(name=org_name)
-            return Response(json.dumps(dict(success='organization created', api_key=org.get('api_key'))), status=200, mimetype='application/json')
+            org.load(name=request.json.get('name'))
+            return Response(json.dumps(dict(success='organization created', api_key=str(org.get('api_key')))), 
+                            status=200, 
+                            mimetype='application/json')
 
         except Exception, e:
-            return Response(json.dumps(dict(error='cannot create organization')), status=500, mimetypr='applicate/json') 
+            print str(e)
+            return Response(json.dumps(dict(error='cannot create organization')), 
+                            status=500, 
+                            mimetypr='applicate/json') 
     else:
-        return Response(json.dumps(dict(error='method not allowed')), status=400, mimetype='application/json')
+        return Response(json.dumps(dict(error='method not allowed')), 
+                        status=400, 
+                        mimetype='application/json')
 
 
 if __name__ == '__main__':
